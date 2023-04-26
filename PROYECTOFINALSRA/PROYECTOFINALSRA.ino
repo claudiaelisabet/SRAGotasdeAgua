@@ -1,0 +1,121 @@
+// Librerías para la pantalla LCD
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include "LedControl.h"
+
+LedControl lc = LedControl(12,11,10,1);
+// Creo el objeto que representa a la pantalla LCD
+LiquidCrystal_I2C pantalla(0x27,16,2);
+
+const int pausa_entre_lecturas = 5000;
+
+// Variable para conversión de la lectura de humedad de suelo
+long porcentaje_humedad = 0; //Defino la variable que me almacenará el porcentaje de humedad
+
+// Configuración de pines
+const int pinRelay = 9; //Relay que enciende la bomba
+const int pinlr = 3; //Pin Rojo
+const int pinla = 4; //Pin Azul
+const int pBuzzer =6; //Pin de Zumbador
+
+//Codificación para encender figuras en la matriz
+byte poneragua[8]{ //Figura Gota y + 
+B00000010,
+B00000111,
+B00100010,
+B01110000,
+B11111000,
+B11111000,
+B11111000,
+B01110000
+};
+
+byte suficienteagua[8]{ //Figura Gota
+B00000000,
+B00000000,
+B00000100,
+B00001110,
+B00011111,
+B00011111,
+B00011111,
+B00001110
+};
+void setup() {
+  Serial.begin(9600); //Configuración de monitor serial
+  pantalla.init(); 
+  pantalla.backlight();
+  lc.shutdown(0,false); //Matriz en false para que inicie apagada
+  lc.setIntensity(0,5);//Para indicar la intensidad de la matriz
+  lc.clearDisplay(0);
+  pinMode(pinRelay, OUTPUT); //Configuración de Salida del Pin para el Relay
+  pinMode(pinlr, OUTPUT); //Configuración de Salida del Pin para Led Rojo
+  pinMode(pinla, OUTPUT); //Configuración de Salida del Pin para Led Azul
+  pinMode(pBuzzer, OUTPUT); //Configuración de Salida del Pin del zumbador
+}
+
+//Función para figura gota de agua +
+void mas_agua(){
+  for (int i =0; i <8; i++){
+    {
+      lc.setRow(0,i, poneragua[i]);
+    }
+  }
+
+}
+
+//Función para figura gota de agua
+void suf_agua(){
+  for (int i =0; i <8; i++){
+    {
+      lc.setRow(0,i, suficienteagua[i]);
+    }
+  }
+
+}
+void loop() {
+  delay(pausa_entre_lecturas);
+  pantalla.clear(); //Limpiar la pantalla LED
+  digitalWrite(pinRelay, LOW); //La bomba debe iniciar apagada
+  // Lectura humedad suelo
+  int humedad_suelo = analogRead(A1); //Defino variabe que tomará los valores del sensor 
+  Serial.print("Humedad del suelo medida: "); 
+  porcentaje_humedad = map(humedad_suelo, 0, 1023, 100, 0);
+  pantalla.setCursor(0, 0); //Se fija el cursor en la columna 0 y fila 0 donde aparecerá el mensaje
+  pantalla.print("Hum. Suelo: "); // Mensaje que aparecerá en la pantalla LED
+  pantalla.setCursor(12, 0); // Se fija el cursor en la columna 12 y fila 0 para que se muestre el %humedad
+  pantalla.print(porcentaje_humedad); //Muestro por pantala el procentaje de humedad de suelo
+
+   digitalWrite(pinRelay, LOW);
+  //Condición que evaluará las intrucciones a ejecutar de acuerdo al valor almacenado en porcentaje_humedad
+  if(porcentaje_humedad >=0 && porcentaje_humedad < 30){ //Si el %humedad es mayor a 0 y menor a 30 entonces
+    //Deberá ejecutar las siguientes instrucciones
+    // Encender Bomba
+     digitalWrite(pinRelay, HIGH); //El Relay enciende la bomba 
+     //delay(1000); 
+     pantalla.setCursor(0, 1);   // Defino el cursor donde aparecerá el mensaje
+      pantalla.print("Falta Agua");  // Escribo el mensaje que deseo que aparezca en la pantalla
+      digitalWrite(pinla, LOW); //Se apaga el Led Azul
+      digitalWrite(pinlr, HIGH); //Se enciende el Les Rojo como alarma
+          mas_agua(); // Llamo la función más agua para representar la figura de la matriz led
+      //Para encender alarma
+      digitalWrite(pBuzzer, HIGH);//Se enciende una alarma de emergencia por ausencia de agua
+      delay(500);
+      digitalWrite(pBuzzer, LOW); //Se apaga la alarma
+      delay(1000);      
+    
+  } else{
+      // Apagar Bomba
+      digitalWrite(pinRelay, LOW); //Apaga la bomba 
+      //delay(5000);
+      pantalla.setCursor(0, 1); // Defino el cursor donde aparecerá el mensaje
+      pantalla.print("Agua Normal"); // Escribo el mensaje que deseo que aparezca en la pantalla
+      suf_agua();     //Llamo la dunción suficiente agua para representar la figura en la matriz led
+      digitalWrite(pinla, HIGH); // Se enciende el Led Azul que indica que la planta está hidratada
+      digitalWrite(pinlr, LOW); // Se apaga el Led Rojo 
+    
+      
+  }
+Serial.println(porcentaje_humedad); // Muestro las lectura de la variable porcentaje_humedad en el monitor serial
+delay(500);
+
+}  
